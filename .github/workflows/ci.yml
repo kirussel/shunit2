@@ -11,9 +11,9 @@ on:
 permissions:
   contents: read                   # jobs only read the code
 
-concurrency:                       # a newer push cancels the older run
+concurrency:                       # a newer push to a PR cancels its older run
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # keep runs for branch/tag pushes
 
 jobs:
   # ---------------------------------------------------------------------
@@ -72,12 +72,31 @@ jobs:
             *)     shell_bin="/bin/${{ matrix.shell }}" ;;
           esac
           [ -x "$shell_bin" ] || { echo "::error::shell not found: $shell_bin"; exit 1; }
+          # Some tests spawn sub-shells with ${SHELL:-sh} (#121). Point SHELL
+          # at the shell under test. Remove once #121 is fixed in the tests.
+          SHELL="$shell_bin"; export SHELL
           ./test_runner -s "$shell_bin"
 
   # ---------------------------------------------------------------------
+  # Color output: the matrix above runs with SHUNIT_COLOR=never, so run
+  # once with SHUNIT_COLOR=always (what Travis used) to cover that path.
+  # ---------------------------------------------------------------------
+  test-color:
+    name: test (color, ubuntu-latest, bash)
+    runs-on: ubuntu-latest
+    env:
+      SHUNIT_COLOR: always
+      TERM: xterm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the test suites with color
+        run: |
+          SHELL=/bin/bash; export SHELL   # see #121 note above
+          ./test_runner -s /bin/bash
+
+  # ---------------------------------------------------------------------
   # ShellCheck, pinned to the version verified locally (0.11.0).
-  # Two relaxations that Phase 3 removes:
-  #   -S warning  : ignores 4 'info' SC2086 findings on 2.1.x
+  # One relaxation:
   #   -e SC3028   : ignores the guarded $RANDOM use in the test helpers
   # ---------------------------------------------------------------------
   shellcheck:
@@ -90,5 +109,5 @@ jobs:
             | tar -xJ -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/shellcheck-v0.11.0" >> "$GITHUB_PATH"
       - run: shellcheck --version
-      - run: shellcheck -S warning shunit2 ./*_test.sh test_runner
+      - run: shellcheck shunit2 ./*_test.sh test_runner
       - run: shellcheck -s sh -e SC3028 shunit2_test_helpers
