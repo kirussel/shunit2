@@ -884,7 +884,7 @@ suite_addTest() {
   shunit_func_=${1:-}
 
   __shunit_suite="${__shunit_suite:+${__shunit_suite} }${shunit_func_}"
-  __shunit_testsTotal=`expr ${__shunit_testsTotal} + 1`
+  __shunit_testsTotal=`expr "${__shunit_testsTotal}" + 1`
 
   unset shunit_func_
 }
@@ -1123,9 +1123,9 @@ _shunit_execSuite() {
 
     # Update stats.
     if ${__SHUNIT_BUILTIN} [ ${__shunit_testSuccess} -eq ${SHUNIT_TRUE} ]; then
-      __shunit_testsPassed=`expr ${__shunit_testsPassed} + 1`
+      __shunit_testsPassed=`expr "${__shunit_testsPassed}" + 1`
     else
-      __shunit_testsFailed=`expr ${__shunit_testsFailed} + 1`
+      __shunit_testsFailed=`expr "${__shunit_testsFailed}" + 1`
     fi
   done
 
@@ -1197,8 +1197,8 @@ _shunit_shouldSkip() {
 # Args:
 #   None
 _shunit_assertPass() {
-  __shunit_assertsPassed=`expr ${__shunit_assertsPassed} + 1`
-  __shunit_assertsTotal=`expr ${__shunit_assertsTotal} + 1`
+  __shunit_assertsPassed=`expr "${__shunit_assertsPassed}" + 1`
+  __shunit_assertsTotal=`expr "${__shunit_assertsTotal}" + 1`
 }
 
 # Records a test failure.
