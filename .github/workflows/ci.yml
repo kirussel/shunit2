@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:               # "Run workflow" button in the Actions tab
+
+permissions:
+  contents: read                   # jobs only read the code
+
+concurrency:                       # a newer push to a PR cancels its older run
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # keep runs for pushes to master
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Unit tests: one job per (OS, shell) pair.
+  #   ubuntu-latest: sh (dash), bash 5, dash, ksh, mksh, zsh, ash -> 7 jobs
+  #   macos-latest : /bin/sh is bash 3.2 POSIX, /bin/bash is 3.2,
+  #                  plus Homebrew bash 5 ("bash5")     -> 6 jobs
+  # ---------------------------------------------------------------------
+  test:
+    name: test (${{ matrix.os }}, ${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false             # one failing shell doesn't cancel the rest
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shell: [sh, bash, dash, ksh, zsh]
+        include:                   # extra combinations beyond the 2x5 grid
+          - { os: macos-latest, shell: bash5 }
+          - { os: ubuntu-latest, shell: mksh }
+          - { os: ubuntu-latest, shell: ash }    # busybox ash
+    env:
+      SHUNIT_COLOR: never
+      TERM: xterm
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Ubuntu ships sh/bash/dash; the others are installed.
+      # (macOS ships sh/bash/dash/ksh/zsh in /bin.)
+      - name: Install shells (Linux)
+        if: runner.os == 'Linux' && contains(fromJSON('["ksh", "mksh", "zsh", "ash"]'), matrix.shell)
+        run: |
+          sudo apt-get update
+          case "${{ matrix.shell }}" in
+            ash)
+              sudo apt-get install -y busybox
+              sudo ln -sf /bin/busybox /bin/ash   # busybox runs as ash by name
+              ;;
+            *)
+              sudo apt-get install -y "${{ matrix.shell }}"
+              ;;
+          esac
+
+      # Homebrew bash 5 may already be present; install it only if missing.
+      - name: Ensure bash 5 (macOS)
+        if: matrix.shell == 'bash5'
+        run: '[ -x "$(brew --prefix)/bin/bash" ] || brew install bash'
+
+      # test_runner SKIPS missing shells and still exits 0, so fail here.
+      # Fixed /bin paths: Homebrew is earlier in PATH and would otherwise
+      # silently replace bash 3.2 with bash 5.
+      - name: Run the test suites
+        run: |
+          case "${{ matrix.shell }}" in
+            bash5) shell_bin="$(brew --prefix)/bin/bash" ;;   # /opt/homebrew (arm64) or /usr/local (Intel)
+            *)     shell_bin="/bin/${{ matrix.shell }}" ;;
+          esac
+          [ -x "$shell_bin" ] || { echo "::error::shell not found: $shell_bin"; exit 1; }
+          # GitHub runners set SHELL=/bin/bash, and some misc tests spawn
+          # sub-shells with ${SHELL:-sh} (#121). Unset it to match the local
+          # bin/ctest baseline; setting it to the shell under test breaks zsh.
+          # Remove after #121 is fixed.
+          unset SHELL
+          ./test_runner -s "$shell_bin"
+
+  # ---------------------------------------------------------------------
+  # Color output: the matrix above runs with SHUNIT_COLOR=never, so run
+  # once with SHUNIT_COLOR=always (what Travis used) to cover that path.
+  # ---------------------------------------------------------------------
+  test-color:
+    name: test (color, ubuntu-latest, bash)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SHUNIT_COLOR: always
+      TERM: xterm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Run the test suites with color
+        run: |
+          unset SHELL   # see #121 note above
+          ./test_runner -s /bin/bash
+
+  # ---------------------------------------------------------------------
+  # ShellCheck, pinned to the version verified locally (0.11.0).
+  # One relaxation:
+  #   -e SC3028   : ignores the guarded $RANDOM use in the test helpers;
+  #                 removed by L003 (roadmap) once the helpers' directives
+  #                 are fixed
+  # ---------------------------------------------------------------------
+  shellcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install ShellCheck v0.11.0
+        run: |
+          f=shellcheck-v0.11.0.linux.x86_64.tar.xz
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/$f"
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >> "$GITHUB_PATH"
+      - run: shellcheck --version
+      - run: shellcheck shunit2 ./*_test.sh test_runner
+      - run: shellcheck -s sh -e SC3028 shunit2_test_helpers
