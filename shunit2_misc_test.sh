@@ -24,26 +24,23 @@ stderrF="${TMPDIR:-/tmp}/STDERR"
 
 # Note: the test script is prefixed with '#' chars so that shUnit2 does not
 # incorrectly interpret the embedded functions as real functions.
+#
+# Shells report the unset variable in one of two ways, and both are a failed
+# test (L009). bash and dash exit, so the EXIT trap reports an unknown
+# failure. zsh and ksh93u+m only abort the eval running the test, so shUnit2
+# reports that the test returned non-zero. A named variable is used because
+# ksh 93u+ ignores an unset $1 inside a function.
 testUnboundVariable() {
-  # zsh and ksh93 do not report the unset parameter as a failed assert, so the
-  # checks below cannot pass there (L009). Skip until that is looked into.
-  # shellcheck disable=SC2016
-  case $( th_execShell -c 'echo "${ZSH_VERSION:+zsh} ${KSH_VERSION:-}"' ) in
-    zsh*|*' AJM '*)
-      startSkipping 'L009: zsh and ksh93 do not report an unset parameter.'
-      return 0
-      ;;
-  esac
-
   unittestF="${SHUNIT_TMPDIR}/unittest"
   sed 's/^#//' >"${unittestF}" <<EOF
 ## Treat unset variables as an error when performing parameter expansion.
+#unset boom_unset_
 #set -u
 #
-#boom() { x=\$1; }  # This function goes boom if no parameters are passed!
+#boom() { x=\${boom_unset_}; }  # This function goes boom!
 #test_boom() {
 #  assertEquals 1 1
-#  boom  # No parameter given
+#  boom
 #  assertEquals 0 \$?
 #}
 #SHUNIT_COLOR='none'
@@ -52,8 +49,13 @@ EOF
   if ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ); then
     fail 'expected a non-zero exit value'
   fi
-  if ! grep '^ASSERT:unknown failure' "${stdoutF}" >/dev/null; then
-    fail 'assert message was not generated'
+  if ! grep '^ASSERT:unknown failure' "${stdoutF}" >/dev/null \
+      && ! grep '^shunit2:ERROR test_boom() returned non-zero' "${stderrF}" \
+          >/dev/null; then
+    fail 'neither an assert nor an error message was generated'
+  fi
+  if grep '^OK' "${stdoutF}" >/dev/null; then
+    fail 'the unset variable was not reported'
   fi
   if ! grep '^Ran [0-9]* test' "${stdoutF}" >/dev/null; then
     fail 'test count message was not generated'
