@@ -35,7 +35,7 @@ commonRunAndCheck() {
   fi
 
   _common_test_succeed=true
-  ( exec "${SHELL:-sh}" "${unittestF}" -- "--output-junit-xml=${currentXmlF}" "$@" >"${stdoutF}" 2>"${stderrF}" ) || {
+  ( th_execShell "${unittestF}" -- "--output-junit-xml=${currentXmlF}" "$@" >"${stdoutF}" 2>"${stderrF}" ) || {
     _common_test_succeed=false
   }
 

@@ -74,11 +74,6 @@ jobs:
             *)     shell_bin="/bin/${{ matrix.shell }}" ;;
           esac
           [ -x "$shell_bin" ] || { echo "::error::shell not found: $shell_bin"; exit 1; }
-          # GitHub runners set SHELL=/bin/bash, and some misc tests spawn
-          # sub-shells with ${SHELL:-sh} (#121). Unset it to match the local
-          # bin/ctest baseline; setting it to the shell under test breaks zsh.
-          # Remove after #121 is fixed.
-          unset SHELL
           ./test_runner -s "$shell_bin"
 
   # ---------------------------------------------------------------------
@@ -98,7 +93,6 @@ jobs:
           persist-credentials: false
       - name: Run the test suites with color
         run: |
-          unset SHELL   # see #121 note above
           ./test_runner -s /bin/bash
 
   # ---------------------------------------------------------------------

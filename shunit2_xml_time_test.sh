@@ -26,7 +26,7 @@ commonRunAndCheck() {
 
   _common_testStartSeconds="$(${__SHUNIT_CMD_DATE_SECONDS} -u)"
 
-  ( exec "${SHELL:-sh}" "${unittestF}" -- "--output-junit-xml=${currentXmlF}" >"${stdoutF}" 2>"${stderrF}" ) || {
+  ( th_execShell "${unittestF}" -- "--output-junit-xml=${currentXmlF}" >"${stdoutF}" 2>"${stderrF}" ) || {
     _common_test_succeed=false
   }
 
@@ -46,7 +46,7 @@ commonCompareTimes() {
 
   # Busybox'es ash (date with 1 second precision) test with GNU sh (date with 1 nanosecond precision) conflicts with time precision.
   # That is why we need to add 1 second to the test duration in this case.
-  if [ "$(date '+%N')" = '%N' ] && [ "$("${SHELL:-sh}" -c "date '+%N'")" != '%N' ]; then
+  if [ "$(date '+%N')" = '%N' ] && [ "$(th_execShell -c "date '+%N'")" != '%N' ]; then
     _common_testDurationPatched="$(${__SHUNIT_CMD_CALC} "${_common_testDurationPatched}" + 1)"
   fi
 

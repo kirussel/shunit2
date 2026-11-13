@@ -25,6 +25,16 @@ stderrF="${TMPDIR:-/tmp}/STDERR"
 # Note: the test script is prefixed with '#' chars so that shUnit2 does not
 # incorrectly interpret the embedded functions as real functions.
 testUnboundVariable() {
+  # zsh and ksh93 do not report the unset parameter as a failed assert, so the
+  # checks below cannot pass there (L009). Skip until that is looked into.
+  # shellcheck disable=SC2016
+  case $( th_execShell -c 'echo "${ZSH_VERSION:+zsh} ${KSH_VERSION:-}"' ) in
+    zsh*|*' AJM '*)
+      startSkipping 'L009: zsh and ksh93 do not report an unset parameter.'
+      return 0
+      ;;
+  esac
+
   unittestF="${SHUNIT_TMPDIR}/unittest"
   sed 's/^#//' >"${unittestF}" <<EOF
 ## Treat unset variables as an error when performing parameter expansion.
@@ -39,7 +49,7 @@ testUnboundVariable() {
 #SHUNIT_COLOR='none'
 #. ${TH_SHUNIT}
 EOF
-  if ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ); then
+  if ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ); then
     fail 'expected a non-zero exit value'
   fi
   if ! grep '^ASSERT:unknown failure' "${stdoutF}" >/dev/null; then
@@ -80,7 +90,7 @@ testIssue29() {
 #SHUNIT_TEST_PREFIX='--- '
 #. ${TH_SHUNIT}
 EOF
-  ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" )
+  ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" )
   grep '^--- test_assert' "${stdoutF}" >/dev/null
   rtrn=$?
   assertEquals "${SHUNIT_TRUE}" "${rtrn}"
@@ -119,7 +129,7 @@ testIssue69() {
 #. ${TH_SHUNIT}
 EOF
     # Ignoring errors with `|| :` as we only care about `FAILED` in the output.
-    ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
+    ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
     grep '^FAILED' "${stdoutF}" >/dev/null
     assertTrue "failure message for ${assert} was not generated" $?
   done
@@ -137,7 +147,7 @@ testIssue77() {
 #. ${TH_SHUNIT}
 EOF
     # Ignoring errors with `|| :` as we only care about `FAILED` in the output.
-    ( exec "${SHELL:-sh}" "${unittestF}" ) >"${stdoutF}" 2>"${stderrF}" || :
+    ( th_execShell "${unittestF}" ) >"${stdoutF}" 2>"${stderrF}" || :
     grep '^FAILED' "${stdoutF}" >/dev/null
     assertTrue "failure of ${func}() did not end test" $?
   done
@@ -146,6 +156,14 @@ EOF
 # Ensure a test failure is recorded for code containing syntax errors.
 # https://github.com/kward/shunit2/issues/84
 testIssue84() {
+  # The fixture is a syntax error only in some shells (L004). Skip where the
+  # shell under test accepts it, as the test cannot pass there.
+  # shellcheck disable=SC2016
+  if ( th_execShell -c ': ${!#3442}' ) >/dev/null 2>&1; then
+    startSkipping 'L004: the shell under test accepts the syntax error fixture.'
+    return 0
+  fi
+
   unittestF="${SHUNIT_TMPDIR}/unittest"
   sed 's/^#//' >"${unittestF}" <<\EOF
 ## Function with syntax error.
@@ -159,10 +177,23 @@ testIssue84() {
 #. ${TH_SHUNIT}
 EOF
   # Ignoring errors with `|| :` as we only care about `FAILED` in the output.
-  ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
+  ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
   if ! grep '^FAILED' "${stdoutF}" >/dev/null; then
     fail 'failure message was not generated'
   fi
+}
+
+# Sub-shell tests must run the shell under test, not the login shell.
+# https://github.com/kward/shunit2/issues/121
+testIssue121() {
+  # Compares shell version strings, so it cannot tell dash from ash (they have
+  # none); the other suites cover those, as they run through th_execShell.
+  # shellcheck disable=SC2016
+  th_ver_='echo "${BASH_VERSION:-}${ZSH_VERSION:-}${KSH_VERSION:-}"'
+  th_sub_=$( th_execShell -c "${th_ver_}" )
+  assertEquals 'sub-shell is not the shell under test' \
+      "${BASH_VERSION:-}${ZSH_VERSION:-}${KSH_VERSION:-}" "${th_sub_}"
+  unset th_ver_ th_sub_
 }
 
 # Demonstrate that asserts are no longer executed in subshells.
@@ -272,6 +303,11 @@ mock_tput() {
 # Note: the test script is prefixed with '#' chars so that shUnit2 does not
 # incorrectly interpret the embedded functions as real functions.
 testPipefail() {
+  if ! ( th_execShell -c 'set -o pipefail' ) >/dev/null 2>&1; then
+    startSkipping 'The shell under test does not support pipefail.'
+    return 0
+  fi
+
   unittestF="${SHUNIT_TMPDIR}/unittest"
   sed 's/^#//' >"${unittestF}" <<EOF
 ## Test that using 'set -o pipefail' does not break shunit2.
@@ -286,7 +322,7 @@ testPipefail() {
 #SHUNIT_COLOR='none'
 #. ${TH_SHUNIT}
 EOF
-  if ! ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ); then
+  if ! ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ); then
     fail 'expected a zero exit value'
   fi
   if ! grep '^Ran [0-9]* test' "${stdoutF}" >/dev/null; then

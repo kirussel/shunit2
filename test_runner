@@ -167,6 +167,10 @@ EOF
     echo "shell name: ${shell_name}"
     echo "shell version: ${shell_version}"
 
+    # Tell the tests which shell they are running under (#121). Tests that
+    # spawn sub-shells use it rather than the login shell in ${SHELL}.
+    SHUNIT_SHELL=${shell_bin}; export SHUNIT_SHELL
+
     # Execute the tests.
     for t in ${tests}; do
       echo
