@@ -156,21 +156,14 @@ EOF
 # Ensure a test failure is recorded for code containing syntax errors.
 # https://github.com/kward/shunit2/issues/84
 testIssue84() {
-  # The fixture is a syntax error only in some shells (L004). Skip where the
-  # shell under test accepts it, as the test cannot pass there.
-  # shellcheck disable=SC2016
-  if ( th_execShell -c ': ${!#3442}' ) >/dev/null 2>&1; then
-    startSkipping 'L004: the shell under test accepts the syntax error fixture.'
-    return 0
-  fi
-
+  # The unclosed `if` is in `eval`, so the fixture still parses and the error
+  # is hit while the test runs. It must be the last command: some shells exit
+  # (the EXIT trap reports the failure), others return non-zero (L004).
   unittestF="${SHUNIT_TMPDIR}/unittest"
   sed 's/^#//' >"${unittestF}" <<\EOF
-## Function with syntax error.
-#syntax_error() { ${!#3442} -334 a$@2[1]; }
+## Test with a syntax error that every shell rejects.
 #test_syntax_error() {
-#  syntax_error
-#  assertTrue ${SHUNIT_TRUE}
+#  eval 'if :; then'
 #}
 #SHUNIT_COLOR='none'
 #SHUNIT_TEST_PREFIX='--- '
