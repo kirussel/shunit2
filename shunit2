@@ -95,7 +95,7 @@ _shunit_float_format() {
 
   # Remove trailing zeros.
   _shunit_format_result_="$(echo "${_shunit_format_result_}" \
-    |command sed 's/0\+$//g')"
+    |command sed 's/00*$//')"
 
   # Remove trailing dot.
   _shunit_format_result_="$(echo "${_shunit_format_result_}" \

@@ -77,6 +77,9 @@ testFloatFormat() {
   assertEquals '0.3' "$(_shunit_float_format .30)"
   assertEquals '0.7' "$(_shunit_float_format .7)"
   assertEquals '1.08' "$(_shunit_float_format 1.080)"
+  assertEquals '100' "$(_shunit_float_format 100.0)"
+  assertEquals '0' "$(_shunit_float_format 0.0)"
+  assertEquals '10.5' "$(_shunit_float_format 10.50)"
 }
 
 testCalcDc() {
