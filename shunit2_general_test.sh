@@ -51,7 +51,7 @@ testStartSkippingWithMessage() {
 #. ${TH_SHUNIT}
 EOF
   # Ignoring errors with `|| :` as we only care about `FAILED` in the output.
-  ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
+  ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
   if ! grep '\[skipping\] SKIP-a-Dee-Doo-Dah' "${stderrF}" >/dev/null; then
     fail 'skipping message was not generated'
   fi
@@ -69,7 +69,7 @@ testStartSkippingWithoutMessage() {
 #. ${TH_SHUNIT}
 EOF
   # Ignoring errors with `|| :` as we only care about `FAILED` in the output.
-  ( exec "${SHELL:-sh}" "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
+  ( th_execShell "${unittestF}" >"${stdoutF}" 2>"${stderrF}" ) || :
   if grep '\[skipping\]' "${stderrF}" >/dev/null; then
     fail 'skipping message was unexpectedly generated'
   fi

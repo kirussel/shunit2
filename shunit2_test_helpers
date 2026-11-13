@@ -47,6 +47,9 @@ DEBUG=${DEBUG:+'th_debug '}
 
 th_RANDOM=0
 
+# Shell under test, set by test_runner (#121). See th_execShell().
+TH_SHELL=${SHUNIT_SHELL:-sh}; export TH_SHELL
+
 #
 # Functions.
 #
@@ -61,6 +64,28 @@ th_fatal() { echo "test:FATAL $*" >&2; }
 
 # Output subtest name.
 th_subtest() { echo " $*" >&2; }
+
+# Replace the current (sub)shell with the shell under test (#121).
+#
+# test_runner exports SHUNIT_SHELL; when a suite is run directly it is unset, so
+# fall back to sh. The value may be two words (`busybox ash`), so it is
+# deliberately left unquoted.
+#
+# Args:
+#   $@: script (or -c string) and its arguments
+# Call it inside ( ) or $( ), as it replaces the calling shell.
+th_execShell() {
+  case ${TH_SHELL} in
+    *zsh)
+      # shUnit2 needs shwordsplit and SHUNIT_PARENT under zsh.
+      SHUNIT_PARENT=$1; export SHUNIT_PARENT
+      # shellcheck disable=SC2086
+      exec ${TH_SHELL} -o shwordsplit "$@"
+      ;;
+  esac
+  # shellcheck disable=SC2086
+  exec ${TH_SHELL} "$@"
+}
 
 th_oneTimeSetUp() {
   # These files will be cleaned up automatically by shUnit2.
