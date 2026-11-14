@@ -261,12 +261,22 @@ EOF
   assertEquals 'testABC test_def testG3 test4 test5 test6 test7 test8 test-9' "${actual}"
 }
 
+# Prints the number of colors with TERM set. Call it only in a command
+# substitution, as it changes TERM.
+#
+# Args:
+#   term: string: value for TERM
+colorsWithTerm() {
+  TERM=$1
+  _shunit_colors
+}
+
 testColors() {
   while read -r cmd colors desc; do
     SHUNIT_CMD_TPUT=${cmd}
-    want=${colors} got=`_shunit_colors`
+    want=${colors} got=$(colorsWithTerm 'xterm')
     assertEquals "${desc}: incorrect number of colors;" \
-        "${got}" "${want}"
+        "${want}" "${got}"
   done <<'EOF'
 missing_tput 16  missing tput command
 mock_tput    256 mock tput command
@@ -275,9 +285,9 @@ EOF
 
 testColorsWitoutTERM() {
   SHUNIT_CMD_TPUT='mock_tput'
-  got=`TERM='' _shunit_colors`
+  got=$(colorsWithTerm '')
   want=16
-  assertEquals "${got}" "${want}"
+  assertEquals "${want}" "${got}"
 }
 
 mock_tput() {
